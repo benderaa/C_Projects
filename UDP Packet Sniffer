@@ -1,0 +1,89 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pcap.h>   // library for packet capture
+#include <netinet/ip.h> // for IP header structure
+#include <netinet/tcp.h> // for TCP header structure
+#include <netinet/udp.h> // for UDP header structure
+#include <string.h> // for string functions
+#include <netinet/ether.h>  // for ethernet header structure
+
+
+void process_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+
+int main() {
+    char errbuf[PCAP_ERRBUF_SIZE];
+    pcap_t *handle;
+    struct bpf_program fp;
+    char filter_exp[] = "ip";   // filter expression to capture only IP packets
+    bpf_u_int32 net;
+    int num_packets = -1;   // number of packets to capture (-1 for unlimited)
+    
+    // open network interface for packet capture
+    handle = pcap_open_live("eth0", BUFSIZ, 1, 1000, errbuf);
+    if (handle == NULL) {
+        fprintf(stderr, "Could not open device: %s\n", errbuf);
+        exit(1);
+    }
+    
+    // compile and apply packet filter
+    if (pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
+        fprintf(stderr, "Could not parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
+        exit(1);
+    }
+    if (pcap_setfilter(handle, &fp) == -1) {
+        fprintf(stderr, "Could not install filter %s: %s\n", filter_exp, pcap_geterr(handle));
+        exit(1);
+    }
+    
+    // capture packets and process them indefinitely
+    pcap_loop(handle, num_packets, process_packet, NULL);
+    
+    // cleanup
+    pcap_freecode(&fp);
+    pcap_close(handle);
+    return 0;
+}
+
+void process_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+    struct iphdr *ip_header;
+    struct tcphdr *tcp_header;
+    struct udphdr *udp_header;
+    char protocol[20];
+    unsigned int ip_header_length;
+    unsigned int source_ip, dest_ip;
+
+    ip_header = (struct iphdr*)(packet + sizeof(struct ethhdr));
+    ip_header_length = ip_header->ihl * 4; // IP header length in bytes
+    source_ip = ip_header->saddr;
+    dest_ip = ip_header->daddr;
+
+    switch (ip_header->protocol) {
+        case IPPROTO_TCP:
+            strcpy(protocol, "TCP");
+            tcp_header = (struct tcphdr*)(packet + sizeof(struct ethhdr) + ip_header_length);
+            printf("TCP packet: ");
+            printf("source IP: %d.%d.%d.%d, ", (source_ip >> 24) & 0xFF, (source_ip >> 16) & 0xFF, (source_ip >> 8) & 0xFF, source_ip & 0xFF);
+            printf("destination IP: %d.%d.%d.%d, ", (dest_ip >> 24) & 0xFF, (dest_ip >> 16) & 0xFF, (dest_ip >> 8) & 0xFF, dest_ip & 0xFF);
+            printf("source port: %d, destination port: %d, packet length: %d\n", ntohs(tcp_header->source), ntohs(tcp_header->dest), header->len);
+            break;
+        case IPPROTO_UDP:
+            strcpy(protocol,
+
+        "UDP");
+        udp_header = (struct udphdr*)(packet + sizeof(struct ethhdr) + ip_header_length);
+        printf("UDP packet: ");
+        printf("source IP: %d.%d.%d.%d, ", (source_ip >> 24) & 0xFF, (source_ip >> 16) & 0xFF, (source_ip >> 8) & 0xFF, source_ip & 0xFF);
+        printf("destination IP: %d.%d.%d.%d, ", (dest_ip >> 24) & 0xFF, (dest_ip >> 16) & 0xFF, (dest_ip >> 8) & 0xFF, dest_ip & 0xFF);
+        printf("source port: %d, destination port: %d, packet length: %d\n", ntohs(udp_header->source), ntohs(udp_header->dest), header->len);
+        break;
+    default:
+        strcpy(protocol, "unknown");
+        break;
+}
+
+printf("IP packet: ");
+printf("source IP: %d.%d.%d.%d, ", (source_ip >> 24) & 0xFF, (source_ip >> 16) & 0xFF, (source_ip >> 8) & 0xFF, source_ip & 0xFF);
+printf("destination IP: %d.%d.%d.%d, ", (dest_ip >> 24) & 0xFF, (dest_ip >> 16) & 0xFF, (dest_ip >> 8) & 0xFF, dest_ip & 0xFF);
+printf("protocol: %s, packet length: %d\n", protocol, header->len);
+
+}
